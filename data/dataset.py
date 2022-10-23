@@ -277,3 +277,70 @@ class COCO(PairedDataset):
 
         return train_samples, val_samples, test_samples
 
+
+class Flickr8k(PairedDataset):
+    def __init__(self, image_field, text_field, img_root, ann_root, id_root=None):
+        roots = {}
+        roots['train'] = {
+            'img': os.path.join(img_root, 'train'),
+            'cap': os.path.join(ann_root, 'train.json')
+        }
+        roots['val'] = {
+            'img': os.path.join(img_root, 'val'),
+            'cap': os.path.join(ann_root, 'val.json')
+        }
+        roots['test'] = {
+            'img': os.path.join(img_root, 'test'),
+            'cap': os.path.join(ann_root, 'test.json')
+        }
+
+        if id_root is not None:
+            ids = {}
+            ids['train'] = np.load(os.path.join(id_root, 'train_anno_ids.npy'))
+            ids['val'] = np.load(os.path.join(id_root, 'val_anno_ids.npy'))
+            ids['test'] = np.load(os.path.join(id_root, 'test_anno_ids.npy'))
+        else:
+            ids = None
+
+        with nostdout():
+            self.train_examples, self.val_examples, self.test_examples = self.get_samples(roots, ids)
+        examples = self.train_examples + self.val_examples + self.test_examples
+        super(Flickr8k, self).__init__(examples, {'image': image_field, 'text': text_field})
+
+    @property
+    def splits(self):
+        train_split = PairedDataset(self.train_examples, self.fields)
+        val_split = PairedDataset(self.val_examples, self.fields)
+        test_split = PairedDataset(self.test_examples, self.fields)
+        return train_split, val_split, test_split
+
+    @classmethod
+    def get_samples(cls, roots, ids_dataset=None):
+        train_samples = []
+        val_samples = []
+        test_samples = []
+
+        # using with coco tools because the data is process to similar with coco annotation
+        for split in ['train', 'val', 'test']:
+            flickr8k = pyCOCO(roots[split]['cap'])
+            root = roots[split]['img']
+
+            ids = ids_dataset[split]
+
+            for index in range(len(ids)):
+                ann_id = ids[index]
+                caption = flickr8k.anns[ann_id]['caption']
+                img_id = flickr8k.anns[ann_id]['image_id']
+                filename = flickr8k.loadImgs(img_id)[0]['file_name']
+
+                example = Example.fromdict({'image': os.path.join(root, filename), 'text': caption})
+
+                if split == 'train':
+                    train_samples.append(example)
+                elif split == 'val':
+                    val_samples.append(example)
+                elif split == 'test':
+                    test_samples.append(example)
+
+        return train_samples, val_samples, test_samples
+
