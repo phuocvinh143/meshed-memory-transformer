@@ -1,5 +1,4 @@
 data/flickr8k
-annotations
 saved_models
 tensorboard_logs
 __pycache__
