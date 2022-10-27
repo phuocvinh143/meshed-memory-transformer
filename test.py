@@ -1,6 +1,7 @@
 import random
 from data import ImageDetectionsField, TextField, RawField
 from data import COCO, DataLoader
+from data.dataset import Flickr8k
 import evaluation
 from models.transformer import Transformer, MemoryAugmentedEncoder, MeshedDecoder, ScaledDotProductAttentionMemory
 import torch
@@ -44,23 +45,24 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Meshed-Memory Transformer')
     parser.add_argument('--batch_size', type=int, default=10)
     parser.add_argument('--workers', type=int, default=0)
-    parser.add_argument('--features_path', type=str)
-    parser.add_argument('--annotation_folder', type=str)
     args = parser.parse_args()
 
     print('Meshed-Memory Transformer Evaluation')
 
+    features_path = 'flickr8k_en_features.hdf5'
+    annotation_folder = 'annotations'
+
     # Pipeline for image regions
-    image_field = ImageDetectionsField(detections_path=args.features_path, max_detections=50, load_in_tmp=False)
+    image_field = ImageDetectionsField(detections_path=features_path, max_detections=50, load_in_tmp=False)
 
     # Pipeline for text
     text_field = TextField(init_token='<bos>', eos_token='<eos>', lower=True, tokenize='spacy',
                            remove_punctuation=True, nopoints=False)
 
     # Create the dataset
-    dataset = COCO(image_field, text_field, 'coco/images/', args.annotation_folder, args.annotation_folder)
+    dataset = Flickr8k(image_field, text_field, 'flickr8k/Images/', annotation_folder, annotation_folder)
     _, _, test_dataset = dataset.splits
-    text_field.vocab = pickle.load(open('vocab.pkl', 'rb'))
+    text_field.vocab = pickle.load(open('vocab_m2_transformer.pkl', 'rb'))
 
     # Model and dataloaders
     encoder = MemoryAugmentedEncoder(3, 0, attention_module=ScaledDotProductAttentionMemory,
@@ -68,7 +70,7 @@ if __name__ == '__main__':
     decoder = MeshedDecoder(len(text_field.vocab), 54, 3, text_field.vocab.stoi['<pad>'])
     model = Transformer(text_field.vocab.stoi['<bos>'], encoder, decoder).to(device)
 
-    data = torch.load('meshed_memory_transformer.pth')
+    data = torch.load('saved_models/m2_transformer_best.pth')
     model.load_state_dict(data['state_dict'])
 
     dict_dataset_test = test_dataset.image_dictionary({'image': image_field, 'text': RawField()})
